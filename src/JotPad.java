@@ -6,11 +6,14 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 import javax.swing.undo.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 public class JotPad extends JFrame{
     private JTextPane textPane;
     private JFileChooser fileChooser;
     private UndoManager undoManager;
+    private JLabel charCountLabel;
 
     public JotPad(){
         setTitle("Jot Pad");
@@ -20,13 +23,31 @@ public class JotPad extends JFrame{
         textPane = new JTextPane();
         fileChooser = new JFileChooser();
         undoManager = new UndoManager();
+        charCountLabel = new JLabel("Characters : 0");
 
         StyledDocument doc = textPane.getStyledDocument();
         doc.addUndoableEditListener(e -> undoManager.addEdit(e.getEdit()));
+        doc.addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                updateCharCount();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                updateCharCount();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                updateCharCount();
+            }
+        });
 
         add(new JScrollPane(textPane),BorderLayout.CENTER);
         MenuBar();
         Toolbar();
+        StatusBar();
 
         setVisible(true);
     }
@@ -36,13 +57,38 @@ public class JotPad extends JFrame{
 
 //        file menu section - menu bar
         JMenu fileMenu = new JMenu("File");
-        JMenuItem newFile = new JMenuItem("New - ctrl+n");
+        JMenuItem newFile = new JMenuItem("New");
         JMenuItem openFile = new JMenuItem("Open - ctrl+o");
         JMenuItem saveFile = new JMenuItem("Save - ctrl+s");
 
-        newFile.addActionListener(e -> textPane.setText(""));
+        newFile.addActionListener(e -> {
+            textPane.setText("");
+            updateCharCount();
+        });
         openFile.addActionListener(e -> openFile());
         saveFile.addActionListener(e -> saveFile());
+
+        // mapping key bindings
+        InputMap inputMap = textPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap actionMap = textPane.getActionMap();
+
+        //open file
+        inputMap.put(KeyStroke.getKeyStroke("control O"), "openFile");
+        actionMap.put("openFile", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                openFile();
+            }
+        });
+
+        //save file
+        inputMap.put(KeyStroke.getKeyStroke("control S"), "saveFile");
+        actionMap.put("saveFile", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                saveFile();
+            }
+        });
 
         fileMenu.add(newFile);
         fileMenu.add(openFile);
@@ -56,7 +102,7 @@ public class JotPad extends JFrame{
         JMenuItem redo = new JMenuItem("Redo - ctrl+y");
         JMenuItem cut = new JMenuItem("Cut - ctrl+x");
         JMenuItem copy = new JMenuItem("Copy - ctrl+c");
-        JMenuItem paste = new JMenuItem("Paste - ctrl+p");
+        JMenuItem paste = new JMenuItem("Paste - ctrl+v");
 
         undo.addActionListener(e -> {
             if (undoManager.canUndo()){
@@ -71,6 +117,28 @@ public class JotPad extends JFrame{
         cut.addActionListener(e -> textPane.cut());
         copy.addActionListener(e -> textPane.copy());
         paste.addActionListener(e -> textPane.paste());
+
+//      undo ctrl+z
+        inputMap.put(KeyStroke.getKeyStroke("control Z"), "undo");
+        actionMap.put("undo", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (undoManager.canUndo()) {
+                    undoManager.undo();
+                }
+            }
+        });
+
+//        redo ctrl+y
+        inputMap.put(KeyStroke.getKeyStroke("control Y"), "redo");
+        actionMap.put("redo", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (undoManager.canRedo()) {
+                    undoManager.redo();
+                }
+            }
+        });
 
         editMenu.add(undo);
         editMenu.add(redo);
@@ -107,6 +175,12 @@ public class JotPad extends JFrame{
         toolBar.add(fontColorButton);
 
         add(toolBar, BorderLayout.NORTH);
+    }
+
+    private void StatusBar(){
+        JPanel statusBar = new JPanel(new BorderLayout());
+        statusBar.add(charCountLabel, BorderLayout.WEST);
+        add(statusBar, BorderLayout.SOUTH);
     }
 
     private void toggleStyle(Object style){
@@ -148,6 +222,7 @@ public class JotPad extends JFrame{
         if(option == JFileChooser.APPROVE_OPTION){
             try(BufferedReader reader = new BufferedReader(new FileReader(fileChooser.getSelectedFile()))){
                 textPane.read(reader, null);
+                updateCharCount();
             }catch(IOException e){
                 e.printStackTrace();
             }
@@ -163,6 +238,10 @@ public class JotPad extends JFrame{
                 e.printStackTrace();
             }
         }
+    }
+
+    private void updateCharCount(){
+        charCountLabel.setText("Characters: "+textPane.getDocument().getLength());
     }
 
 
